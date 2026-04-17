@@ -17,8 +17,8 @@ game_state = "START"
 start_hold_time = 0
 hold_duration = 3  # second
 
-time_add = 5
-time_per_pic = 10
+time_add = 3
+time_per_pic = 5
 
 game_start_time = 0
 time_limit = 99999
@@ -120,7 +120,7 @@ def check_status(frame, error, current_level, cooldown, total_level):
     if accuracy >= 78 and cooldown == 0:
         status = "PASS"
         current_level += 1
-        cooldown = 20
+        cooldown = 15
     else:
         status = "FAIL"
 
@@ -255,8 +255,8 @@ for path in quiz_paths:
 
 current_level = 0
 total_levels = len(poses)
-# time_limit = time_per_pic*total_levels
-time_limit = 5
+time_limit = time_per_pic*total_levels
+# time_limit = 5
 time_left = time_limit
 
 # ------------------------------
