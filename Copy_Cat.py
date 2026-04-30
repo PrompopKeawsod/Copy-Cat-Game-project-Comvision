@@ -4,12 +4,41 @@ from ultralytics import YOLO
 import time
 import pygame
 import os
+import json
+import sys
+
+# Add current directory to PATH for DLLs
+os.environ["PATH"] = os.path.abspath(".") + os.pathsep + os.environ["PATH"]
+
+# ------------------------------
+# Resource path
+# ------------------------------
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 # ------------------------------
 # Val
 # ------------------------------
-width = 1200
-height = 720
+
+if not os.path.exists(resource_path("config.json")):
+    print ("Error: config.json not found!")
+    sys.exit(1)
+
+config_path = resource_path("config.json")
+try:
+    with open(config_path, "r") as f:
+        config = json.load(f)
+except json.JSONDecodeError:
+    print("Error: Invalid JSON in config.json")
+    sys.exit(1)
+
+width = config["width"]
+height = config["height"]
 BAR_HEIGHT = height // 10
 
 game_state = "START"
@@ -17,8 +46,8 @@ game_state = "START"
 start_hold_time = 0
 hold_duration = 3  # second
 
-time_add = 3
-time_per_pic = 5
+time_add = config["time_add"]
+time_per_pic = config["time_per_pic"]
 
 game_start_time = 0
 time_limit = 99999
@@ -26,20 +55,21 @@ time_left = time_limit
 time_bonus = 0
 final_time_used = 0
 
+accuracy_threshold = config["accuracy_threshold"]
 passed_levels = 0
 
 status = ""
 game_clear = False
 
-model = YOLO("yolo26n-pose.pt")
+model = YOLO(resource_path("yolo26n-pose.pt"))
 pygame.mixer.init()
 
 #sound
-sfx_pass = pygame.mixer.Sound("sfx/correct.mp3")
-sfx_win = pygame.mixer.Sound("sfx/victory.mp3")
-sfx_lose = pygame.mixer.Sound("sfx/fail.mp3")
-bgm_intro = "sfx/intro.mp3"
-bgm_bgm = "sfx/bgm.mp3"
+sfx_pass = pygame.mixer.Sound(resource_path("sfx/correct.mp3"))
+sfx_win = pygame.mixer.Sound(resource_path("sfx/victory.mp3"))
+sfx_lose = pygame.mixer.Sound(resource_path("sfx/fail.mp3"))
+bgm_intro = resource_path("sfx/intro.mp3")
+bgm_bgm = resource_path("sfx/bgm.mp3")
 
 current_bgm = None
 
@@ -58,22 +88,23 @@ target_scales = []
 target_poses = []
 pictures = []
 
-t_pose_path = "pose/T-Pose/t-pose.jpg"
+#load image pose
+t_pose_path = resource_path("pose/T-Pose/t-pose.jpg")
 quiz_paths = []
-for file in os.listdir("pose/quiz"):
+for file in os.listdir(resource_path("pose/quiz")):
     if file.endswith(".jpg"):
-        quiz_paths.append(os.path.join("pose/quiz", file))
+        quiz_paths.append(os.path.join(resource_path("pose/quiz"), file))
 
 quiz_paths.sort()
 # pose_paths = [f"pose/pose{i}.jpg" for i in range(1, 23)]
 
 #img
-pic_win = cv.imread("ui/win.png", cv.IMREAD_UNCHANGED)
-pic_lose = cv.imread("ui/game_over.png", cv.IMREAD_UNCHANGED)
-pic_cat_lose = cv.imread("ui/game_over_cat.png", cv.IMREAD_UNCHANGED)
-pic_cat_win = cv.imread("ui/win_cat.png", cv.IMREAD_UNCHANGED)
+pic_win = cv.imread(resource_path("ui/win.png"), cv.IMREAD_UNCHANGED)
+pic_lose = cv.imread(resource_path("ui/game_over.png"), cv.IMREAD_UNCHANGED)
+pic_cat_lose = cv.imread(resource_path("ui/game_over_cat.png"), cv.IMREAD_UNCHANGED)
+pic_cat_win = cv.imread(resource_path("ui/win_cat.png"), cv.IMREAD_UNCHANGED)
 
-pic_logo = cv.imread("ui/logo.png", cv.IMREAD_UNCHANGED)
+pic_logo = cv.imread(resource_path("ui/logo.png"), cv.IMREAD_UNCHANGED)
 pic_logo = cv.resize(pic_logo, (0,0), fx=0.4, fy=0.4)
 
 # camera
@@ -117,14 +148,14 @@ def align_pose(target, player, target_scale):
 def check_status(frame, error, current_level, cooldown, total_level):
     accuracy = get_accuracy(error, max_error)
 
-    if accuracy >= 78 and cooldown == 0:
+    if accuracy >= accuracy_threshold and cooldown == 0:
         status = "PASS"
         current_level += 1
         cooldown = 15
     else:
         status = "FAIL"
 
-    cv.putText(frame, f"{status} | Accuracy: {int(accuracy)} | Level: {int(current_level)}/{int(total_level + 1)}", (50,50), cv.FONT_HERSHEY_SIMPLEX, 1, (0,255,0) if status=="PASS" else (0,0,255), 2)
+    cv.putText(frame, f"Accuracy : {int(accuracy)} >= {accuracy_threshold} to Pass | Level: {int(current_level)}/{int(total_level + 1)}", (50,50), cv.FONT_HERSHEY_SIMPLEX, 1, (0,255,0) if status=="PASS" else (0,0,255), 2)
     return current_level, cooldown
 
 def display_pic(frame, picture):
@@ -135,7 +166,7 @@ def display_pic(frame, picture):
 def is_t_pose(player_pose, target_pose_norm):
     error = pose_error(player_pose, target_pose_norm)
     acc = get_accuracy(error, max_error)
-    return acc > 83
+    return acc >= accuracy_threshold
 
 def draw_text_center_x(img, text, y, scale=1, color=(255,255,255), thickness=2):
     font = cv.FONT_HERSHEY_SIMPLEX
@@ -252,6 +283,9 @@ for path in quiz_paths:
 
         pic_small = cv.resize(img, (0,0), fx=0.4, fy=0.4)
         pictures.append(pic_small)
+    else:
+        print(f"Could not detect keypoints in {path}")
+        pass
 
 current_level = 0
 total_levels = len(poses)
